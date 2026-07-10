@@ -1,58 +1,56 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.0;
 
 contract PersonalVault {
-    // Alamat dompet milik pemilik brankas
-    address public owner;
+    address public owner;           // Who owns this vault
+    uint256 public unlockTime;      // When funds become available
     
-    // Batas waktu kapan dana bisa diambil
-    uint256 public unlockTime;
-    
-    // Deklarasi seluruh event sesuai spesifikasi brief
+    // Events
     event Deposit(address indexed sender, uint256 amount);
     event Withdrawal(uint256 amount, uint256 timestamp);
     event LockExtended(uint256 newUnlockTime);
     
-    // Deklarasi custom error hemat gas sesuai spesifikasi brief
+    // Custom errors
     error FundsLocked();
     error NotOwner();
     error InvalidUnlockTime();
 
-    // Satpam pembatas hak akses pemilik
+    // Access Control Pattern
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
         _;
     }
 
-    // Pembuatan kontrak pertama kali dengan penentuan waktu awal
+    // Constructor
     constructor(uint256 _unlockTime) payable {
         require(_unlockTime > block.timestamp, "Unlock time must be in the future");
         owner = msg.sender;
         unlockTime = _unlockTime;
     }
-    
-    // Fungsi untuk menerima setoran koin dari pemilik
+
+    // 1. Deposit Function
     function deposit() public payable {
         emit Deposit(msg.sender, msg.value);
     }
-    
-    // Fungsi untuk mengambil seluruh dana jika waktu sudah terpenuhi
+
+    // 2. Withdraw Function
     function withdraw() public onlyOwner {
+        // Time Handling
         if (block.timestamp < unlockTime) {
             revert FundsLocked();
         }
         
         uint256 balance = address(this).balance;
-        require(balance > 0, "No balance");
+        require(balance > 0, "No balance to withdraw");
         
-        // Mengirim koin menggunakan metode call sesuai instruksi keamanan brief
+        // Safe ETH transfer using call
         (bool success, ) = payable(owner).call{value: balance}("");
         require(success, "Transfer failed");
         
         emit Withdrawal(balance, block.timestamp);
     }
-    
-    // Fungsi untuk memperpanjang durasi penguncian dana
+
+    // 3. Extend Lock Function
     function extendLock(uint256 newTime) public onlyOwner {
         if (newTime <= unlockTime) {
             revert InvalidUnlockTime();
